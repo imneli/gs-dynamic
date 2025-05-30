@@ -4,10 +4,12 @@ import datetime
 from collections import deque
 from typing import Dict, List, Optional, Tuple
 
+# Classe base para nós utilizados em estruturas de dados
 class No:
     def __init__(self, dados):
         self.dados, self.proximo, self.esquerda, self.direita = dados, None, None, None
 
+# Lista ligada para histórico de ações das equipes
 class ListaLigada:
     def __init__(self):
         self.cabeca, self.tamanho = None, 0
@@ -23,6 +25,7 @@ class ListaLigada:
             atual = atual.proximo
         return elementos
 
+# Árvore binária para organizar regiões por prioridade de risco
 class ArvoreRegiao:
     def __init__(self):
         self.raiz = None
@@ -40,6 +43,7 @@ class ArvoreRegiao:
         else:
             self._inserir_recursivo(getattr(no, lado), regiao, prioridade)
     
+    # Busca binária para encontrar região por prioridade
     def busca_binaria_regiao(self, prioridade_alvo):
         return self._buscar_recursivo(self.raiz, prioridade_alvo)
     
@@ -59,6 +63,7 @@ class ArvoreRegiao:
             resultado.append(no.dados)
             self._em_ordem_recursivo(no.direita, resultado)
 
+# Grafo para representar conexões entre regiões e calcular rotas
 class GrafoRegioes:
     def __init__(self):
         self.vertices, self.coordenadas = {}, {}
@@ -68,34 +73,64 @@ class GrafoRegioes:
             self.vertices[regiao] = {}
             if coordenadas: self.coordenadas[regiao] = coordenadas
     
+    # Adiciona conexão bidirecional entre duas regiões
     def adicionar_aresta(self, regiao1, regiao2, peso):
         self.adicionar_vertice(regiao1), self.adicionar_vertice(regiao2)
         self.vertices[regiao1][regiao2] = self.vertices[regiao2][regiao1] = peso
     
+    # Algoritmo de Dijkstra para encontrar menor caminho entre regiões
     def dijkstra(self, origem, destino):
-        if origem not in self.vertices or destino not in self.vertices: return None, float('inf')
+        if origem not in self.vertices or destino not in self.vertices: 
+            return None, float('inf')
         
-        distancias, predecessores, visitados = {v: float('inf') for v in self.vertices}, {v: None for v in self.vertices}, set()
-        distancias[origem], heap = 0, [(0, origem)]
+        # Inicialização das estruturas do algoritmo
+        distancias = {v: float('inf') for v in self.vertices}
+        predecessores = {v: None for v in self.vertices}
+        visitados = set()
+        
+        distancias[origem] = 0
+        heap = [(0, origem)]  # Min-heap para processar vértices por distância
         
         while heap:
             dist_atual, vertice_atual = heapq.heappop(heap)
-            if vertice_atual in visitados: continue
-            visitados.add(vertice_atual)
-            if vertice_atual == destino: break
             
+            if vertice_atual in visitados:
+                continue
+            
+            visitados.add(vertice_atual)
+            
+            # Otimização: parar quando chegamos ao destino
+            if vertice_atual == destino:
+                break
+            
+            # Relaxamento das arestas
             for vizinho, peso in self.vertices[vertice_atual].items():
-                if vizinho not in visitados and (nova_dist := dist_atual + peso) < distancias[vizinho]:
-                    distancias[vizinho], predecessores[vizinho] = nova_dist, vertice_atual
-                    heapq.heappush(heap, (nova_dist, vizinho))
+                if vizinho not in visitados:
+                    nova_dist = dist_atual + peso
+                    if nova_dist < distancias[vizinho]:
+                        distancias[vizinho] = nova_dist
+                        predecessores[vizinho] = vertice_atual
+                        heapq.heappush(heap, (nova_dist, vizinho))
         
-        caminho, vertice_atual = [], destino
+        # Reconstrução do caminho
+        if distancias[destino] == float('inf'):
+            return None, float('inf')
+        
+        caminho = []
+        vertice_atual = destino
         while vertice_atual is not None:
             caminho.append(vertice_atual)
             vertice_atual = predecessores[vertice_atual]
         
-        return (caminho[::-1], distancias[destino]) if caminho and caminho[0] == origem else (None, float('inf'))
-    
+        caminho.reverse()
+        
+        # Validação do caminho
+        if caminho[0] != origem:
+            return None, float('inf')
+        
+        return caminho, distancias[destino]
+
+    # Visualização das conexões do grafo
     def listar_conexoes(self):
         print("\n🗺️ MAPA DE CONEXÕES ENTRE REGIÕES:\n" + "-" * 50)
         for regiao, conexoes in self.vertices.items():
@@ -103,7 +138,26 @@ class GrafoRegioes:
             for vizinho, peso in conexoes.items():
                 print(f"   → {vizinho} (distância: {peso} unidades)")
             print()
+        
+        # Estatísticas do grafo
+        total_regioes = len(self.vertices)
+        total_conexoes = sum(len(c) for c in self.vertices.values()) // 2
+        conectividade_media = sum(len(c) for c in self.vertices.values()) / total_regioes
+        
+        print("📊 ESTATÍSTICAS DO MAPA:\n" + "-" * 30)
+        print(f"🌍 Total de regiões: {total_regioes}")
+        print(f"🔗 Total de conexões: {total_conexoes}")
+        print(f"📈 Conectividade média: {conectividade_media:.1f} conexões por região")
+        
+        print("\n🔗 CONECTIVIDADE DAS REGIÕES:\n" + "-" * 35)
+        for regiao, conexoes in self.vertices.items():
+            conexoes_formatadas = ", ".join(conexoes.keys())
+            print(f"🏞️ {regiao}:")
+            print(f"   🔗 Conectada com: {conexoes_formatadas}")
+            print(f"   📊 Total de conexões: {len(conexoes)}")
+            print()
 
+# Classe para representar uma ocorrência de queimada
 class Ocorrencia:
     def __init__(self, id_ocorrencia, regiao, severidade, coordenadas, descricao=""):
         self.id, self.regiao, self.severidade = id_ocorrencia, regiao, severidade
@@ -111,9 +165,11 @@ class Ocorrencia:
         self.timestamp, self.status = datetime.datetime.now(), "PENDENTE"
         self.equipe_responsavel, self.acoes_realizadas = None, []
     
+    # Comparação para heap de prioridade (maior severidade = maior prioridade)
     def __lt__(self, other): return self.severidade > other.severidade
     def __str__(self): return f"Ocorrência {self.id} - {self.regiao} (Severidade: {self.severidade})"
 
+# Classe para representar equipes de resposta
 class Equipe:
     def __init__(self, id_equipe, nome, especializacao):
         self.id, self.nome, self.especializacao = id_equipe, nome, especializacao
@@ -126,21 +182,28 @@ class Equipe:
             'equipe_id': self.id
         })
 
+# Sistema principal IVERN
 class SistemaIVERN:
     def __init__(self):
+        # Estruturas de dados principais
         self.fila_prioridade, self.pilha_desfazer, self.fila_processamento = [], deque(), deque()
         self.arvore_regioes, self.grafo_regioes = ArvoreRegiao(), GrafoRegioes()
         self.ocorrencias_ativas, self.equipes, self.regioes_risco = {}, {}, {}
         self.proximo_id_ocorrencia, self.proximo_id_equipe = 1, 1
         self._inicializar_sistema()
     
+    # Configuração inicial do sistema com equipes, regiões e conexões
     def _inicializar_sistema(self):
+        # Criação das equipes padrão
         for nome, esp in [("Brigada Florestal Alpha", "TERRESTRE"), ("Squadrão Aéreo Beta", "AEREA"), ("Equipe Resgate Gamma", "RESGATE")]:
             self.adicionar_equipe(nome, esp)
         
+        # Configuração das regiões com níveis de risco
         for regiao, prioridade in [("Mata Atlântica Sul", 8), ("Cerrado Central", 6), ("Amazônia Norte", 9), ("Pantanal", 7), ("Caatinga", 5)]:
-            self.regioes_risco[regiao], self.arvore_regioes.inserir(regiao, prioridade)
+            self.regioes_risco[regiao] = prioridade
+            self.arvore_regioes.inserir(regiao, prioridade)
         
+        # Coordenadas geográficas das regiões
         regioes_coords = {
             "Mata Atlântica Sul": (-23.5, -46.6),
             "Cerrado Central": (-15.8, -47.9),
@@ -152,6 +215,7 @@ class SistemaIVERN:
         for regiao, coords in regioes_coords.items():
             self.grafo_regioes.adicionar_vertice(regiao, coords)
         
+        # Definição das conexões entre regiões com distâncias
         for regiao1, regiao2, distancia in [
             ("Mata Atlântica Sul", "Cerrado Central", 12),
             ("Cerrado Central", "Pantanal", 8),
@@ -163,9 +227,10 @@ class SistemaIVERN:
         ]:
             self.grafo_regioes.adicionar_aresta(regiao1, regiao2, distancia)
     
+    # Inserção de nova ocorrência com priorização automática
     def inserir_nova_ocorrencia(self, regiao, severidade, coordenadas, descricao=""):
         ocorrencia = Ocorrencia(self.proximo_id_ocorrencia, regiao, severidade, coordenadas, descricao)
-        heapq.heappush(self.fila_prioridade, ocorrencia)
+        heapq.heappush(self.fila_prioridade, ocorrencia)  # Heap para priorização
         self.fila_processamento.append(ocorrencia)
         self.ocorrencias_ativas[ocorrencia.id] = ocorrencia
         self.pilha_desfazer.append(('INSERIR_OCORRENCIA', ocorrencia.id))
@@ -173,6 +238,7 @@ class SistemaIVERN:
         print(f"✅ Nova ocorrência registrada: {ocorrencia}")
         return ocorrencia.id
     
+    # Sistema de atendimento baseado em prioridade
     def atender_proxima_ocorrencia(self):
         if not self.fila_prioridade:
             print("❌ Não há ocorrências pendentes")
@@ -184,6 +250,7 @@ class SistemaIVERN:
             print("⚠️ Nenhuma equipe disponível no momento")
             return None
         
+        # Atribuição da equipe à ocorrência
         ocorrencia.status, ocorrencia.equipe_responsavel = "EM_ATENDIMENTO", equipe.id
         equipe.disponivel = False
         equipe.registrar_acao(f"Iniciado atendimento da ocorrência {ocorrencia.id} em {ocorrencia.regiao}")
@@ -191,6 +258,7 @@ class SistemaIVERN:
         print(f"🚨 Atendimento iniciado: {ocorrencia} por {equipe.nome}")
         return ocorrencia.id
     
+    # Algoritmo de seleção da melhor equipe baseado em especialização e severidade
     def _encontrar_melhor_equipe(self, ocorrencia):
         equipes_disponiveis = [e for e in self.equipes.values() if e.disponivel]
         return next((e for e in equipes_disponiveis if 
@@ -198,6 +266,7 @@ class SistemaIVERN:
                    (ocorrencia.severidade >= 6 and e.especializacao == "TERRESTRE")), 
                    equipes_disponiveis[0] if equipes_disponiveis else None)
 
+    # Registro de ações realizadas pelas equipes
     def registrar_acoes_realizadas(self, id_ocorrencia, acoes):
         if id_ocorrencia not in self.ocorrencias_ativas:
             print(f"❌ Ocorrência {id_ocorrencia} não encontrada")
@@ -221,9 +290,11 @@ class SistemaIVERN:
         ocorrencia = self.ocorrencias_ativas[id_ocorrencia]
         ocorrencia.status = "RESOLVIDO"
         
+        # Liberação da equipe para novos atendimentos
         if ocorrencia.equipe_responsavel:
             equipe = self.equipes[ocorrencia.equipe_responsavel]
-            equipe.disponivel, equipe.registrar_acao = True, f"Finalizada ocorrência {id_ocorrencia}"
+            equipe.disponivel = True
+            equipe.registrar_acao(f"Finalizada ocorrência {id_ocorrencia}")
         
         del self.ocorrencias_ativas[id_ocorrencia]
         print(f"✅ Ocorrência {id_ocorrencia} finalizada")
@@ -255,6 +326,7 @@ class SistemaIVERN:
         print(f"🔄 Status da ocorrência {id_ocorrencia} atualizado: {ocorrencia.status}")
         return True
     
+    # Geração de relatórios estatísticos por região
     def gerar_relatorio_regiao(self, regiao=None):
         print(f"\n📊 RELATÓRIO DE ATENDIMENTO{' - ' + regiao if regiao else ''}\n" + "=" * 60)
         contadores = {}
@@ -275,6 +347,7 @@ class SistemaIVERN:
         for equipe in self.equipes.values():
             print(f"• {equipe.nome} ({equipe.especializacao}): {'🟢 Disponível' if equipe.disponivel else '🔴 Em atendimento'}")
     
+    # Simulação de chamadas para testes
     def simular_chamadas_aleatorias(self, quantidade=5):
         print(f"\n🎲 SIMULANDO {quantidade} CHAMADAS ALEATÓRIAS\n" + "=" * 50)
         for i in range(quantidade):
@@ -295,6 +368,7 @@ class SistemaIVERN:
         self.equipes[equipe.id], self.proximo_id_equipe = equipe, self.proximo_id_equipe + 1
         return equipe.id
     
+    # Sistema de desfazer para operações críticas
     def desfazer_ultima_acao(self):
         if not self.pilha_desfazer:
             print("❌ Nenhuma ação para desfazer")
@@ -322,6 +396,7 @@ class SistemaIVERN:
         print(f"• Equipes disponíveis: {sum(1 for e in self.equipes.values() if e.disponivel)}\n• Total de equipes: {len(self.equipes)}")
         print(f"• Ações na pilha de desfazer: {len(self.pilha_desfazer)}")
     
+    # Cálculo de rota otimizada usando Dijkstra
     def calcular_rota_otima(self, regiao_origem, regiao_destino):
         caminho, distancia = self.grafo_regioes.dijkstra(regiao_origem, regiao_destino)
         if caminho is None:
@@ -333,6 +408,7 @@ class SistemaIVERN:
         print(f"⏱️ Tempo estimado: {distancia * 0.5:.1f} horas\n🚁 Paradas intermediárias: {len(caminho) - 2}")
         return {'caminho': caminho, 'distancia': distancia, 'tempo_estimado': distancia * 0.5}
     
+    # Planejamento estratégico de atendimento múltiplo
     def planejar_atendimento_multiplo(self, regiao_base):
         regioes_com_ocorrencias = list(set(occ.regiao for occ in self.ocorrencias_ativas.values() if occ.regiao != regiao_base))
         if not regioes_com_ocorrencias:
@@ -343,20 +419,32 @@ class SistemaIVERN:
             print(f"❌ Região base {regiao_base} não encontrada no mapa")
             return None
         
-        rotas = {regiao: {'rota': self.grafo_regioes.dijkstra(regiao_base, regiao)} for regiao in regioes_com_ocorrencias}
         rotas_priorizadas = []
         
-        for regiao, rota_info in rotas.items():
+        # Cálculo de score para priorização (severidade vs distância)
+        for regiao in regioes_com_ocorrencias:
+            caminho, distancia = self.grafo_regioes.dijkstra(regiao_base, regiao)
+            
+            if caminho is None or distancia == float('inf'):
+                print(f"⚠️ Não há rota disponível de {regiao_base} para {regiao}")
+                continue
+            
             ocorrencias_regiao = [occ for occ in self.ocorrencias_ativas.values() if occ.regiao == regiao]
             severidade_media = sum(occ.severidade for occ in ocorrencias_regiao) / len(ocorrencias_regiao)
+            
             rotas_priorizadas.append({
                 'regiao': regiao,
-                'rota': {'caminho': rota_info['rota'][0], 'distancia': rota_info['rota'][1]},
+                'rota': {'caminho': caminho, 'distancia': distancia},
                 'ocorrencias': len(ocorrencias_regiao),
                 'severidade_media': severidade_media,
-                'score': (severidade_media * 10) - rota_info['rota'][1]
+                'score': (severidade_media * 10) - distancia  # Score de priorização
             })
         
+        if not rotas_priorizadas:
+            print("❌ Nenhuma rota válida encontrada para as regiões com ocorrências")
+            return None
+        
+        # Ordenação por score de prioridade
         rotas_priorizadas.sort(key=lambda x: x['score'], reverse=True)
         print(f"\n🗺️ PLANEJAMENTO DE ATENDIMENTO MÚLTIPLO\n📍 Base de operações: {regiao_base}\n" + "=" * 60)
         print("🎯 ORDEM DE ATENDIMENTO RECOMENDADA:\n" + "-" * 40)
@@ -370,11 +458,29 @@ class SistemaIVERN:
     
     def visualizar_mapa_conexoes(self):
         self.grafo_regioes.listar_conexoes()
-        total_regioes = len(self.grafo_regioes.vertices)
-        print(f"📊 ESTATÍSTICAS DO MAPA:\n   • Total de regiões: {total_regioes}")
-        print(f"   • Total de conexões: {sum(len(c) for c in self.grafo_regioes.vertices.values()) // 2}")
-        print(f"   • Conectividade média: {sum(len(c) for c in self.grafo_regioes.vertices.values()) / total_regioes:.1f} conexões por região")
+    
+    # Método de debug para verificar conectividade
+    def debug_grafo(self):
+        print("\n🔗 VERIFICANDO CONECTIVIDADE DO GRAFO:")
+        print(f"📊 Total de regiões: {len(self.grafo_regioes.vertices)}")
+        print(f"🔗 Total de conexões: {sum(len(c) for c in self.grafo_regioes.vertices.values()) // 2}")
+        print(f"📈 Conectividade média: {sum(len(c) for c in self.grafo_regioes.vertices.values()) / len(self.grafo_regioes.vertices):.1f} conexões por região")
+        
+        print("\n✅ Testando rotas principais:")
+        rotas_teste = [
+            ("Mata Atlântica Sul", "Amazônia Norte"),
+            ("Cerrado Central", "Pantanal"),
+            ("Caatinga", "Mata Atlântica Sul")
+        ]
+        
+        for origem, destino in rotas_teste:
+            caminho, dist = self.grafo_regioes.dijkstra(origem, destino)
+            if caminho:
+                print(f"   ✓ {origem} → {destino}: {dist} unidades ({len(caminho)-1} conexões)")
+            else:
+                print(f"   ❌ {origem} → {destino}: Sem rota disponível")
 
+# Interface de menu interativo
 def menu_principal():
     sistema = SistemaIVERN()
     while True:
@@ -414,6 +520,51 @@ def menu_principal():
         except KeyboardInterrupt: print("\n👋 Sistema encerrado pelo usuário."); break
         except Exception as e: print(f"❌ Erro inesperado: {e}")
 
+# Demonstração automatizada do sistema
+def exemplo_automatizado():
+    print("🚀 EXECUTANDO EXEMPLO AUTOMATIZADO DO SISTEMA IVERN")
+    print("="*60)
+    
+    sistema = SistemaIVERN()
+    
+    # Cenário de teste completo
+    print("\n1️⃣ Inserindo ocorrências...")
+    sistema.inserir_nova_ocorrencia("Mata Atlântica Sul", 8, (-23.5505, -46.6333), "Incêndio de grande porte")
+    sistema.inserir_nova_ocorrencia("Cerrado Central", 5, (-15.7942, -47.8822), "Queimada controlada descontrolada")
+    sistema.inserir_nova_ocorrencia("Amazônia Norte", 10, (-3.1190, -60.0217), "Emergência crítica")
+    
+    print("\n2️⃣ Atendendo ocorrências por prioridade...")
+    sistema.atender_proxima_ocorrencia()
+    sistema.atender_proxima_ocorrencia()
+    
+    print("\n3️⃣ Registrando ações...")
+    sistema.registrar_acoes_realizadas(1, ["Equipe deslocada", "Perímetro estabelecido", "Combate iniciado"])
+    
+    print("\n4️⃣ Gerando relatório...")
+    sistema.gerar_relatorio_regiao()
+    
+    print("\n5️⃣ Consultando histórico...")
+    sistema.listar_historico_equipe(1)
+    
+    sistema.status_sistema()
+    
+    print("\n6️⃣ Simulando chamadas aleatórias...")
+    sistema.simular_chamadas_aleatorias(3)
+    
+    # Demonstração das funcionalidades de roteamento
+    print("\n7️⃣ Demonstrando funcionalidades do grafo...")
+    sistema.debug_grafo()
+    sistema.calcular_rota_otima("Mata Atlântica Sul", "Amazônia Norte")
+    sistema.planejar_atendimento_multiplo("Cerrado Central")
+    sistema.visualizar_mapa_conexoes()
+    
+    print("\n✅ Exemplo automatizado concluído!")
+
+# Ponto de entrada do programa
 if __name__ == "__main__":
     print("🌿 BEM-VINDO AO SISTEMA IVERN 🌿\nSistema de Coordenação de Resposta a Queimadas")
-    menu_principal() if input("Escolha o modo:\n1. Menu interativo\n2. Exemplo automatizado\nOpção: ").strip() == "1" else None
+    modo = input("Escolha o modo:\n1. Menu interativo\n2. Exemplo automatizado\nOpção: ").strip()
+    if modo == "2":
+        exemplo_automatizado()
+    else:
+        menu_principal()
